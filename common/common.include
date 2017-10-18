@@ -1,0 +1,14 @@
+# common functions and constants to be source'd into misc-tools
+
+
+# Exit with message and return code 1
+fail() {
+  echo -e "$1"
+  exit 1
+}
+
+
+# Get the current branch from git if any
+git_current_branch() {
+  git rev-parse --abbrev-ref HEAD
+}

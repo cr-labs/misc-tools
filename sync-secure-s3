@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+BASH_DIR=$(dirname "$0")
+source ${BASH_DIR%*/}/common/common.include
+source ${BASH_DIR}/../misc-tools-config/config
+
+echo "Syncing"
+KEY=$(security find-generic-password -l "${S3_SYNC_SECURE_ENCRYPTION_KEY_LABEL_IN_KEYCHAIN}" -w) || fail "error reading key ${S3_SYNC_SECURE_ENCRYPTION_KEY_LABEL_IN_KEYCHAIN}"
+
+for index in ${!S3_SYNC_SECURE_SOURCE_PATH_DESTS[@]}; do
+  source="${S3_SYNC_SECURE_SOURCE_PATH_DESTS[$index]%%,*}" || fail "Error parsing source in:${S3_SYNC_SECURE_SOURCE_PATH_DESTS[$index]}"
+  dest="${S3_SYNC_SECURE_SOURCE_PATH_DESTS[$index]##*,}" || fail "Error parsing dest in:${S3_SYNC_SECURE_SOURCE_PATH_DESTS[$index]}"
+  echo "${source} -> ${dest}"
+
+  # Sync all content into S3 that isn't there; don't delete anything in S3 even if not in the local copy
+  aws s3 sync --no-follow-symlinks --sse-c --sse-c-key "${KEY}" "${source}" "${dest}" || fail "error running aws s3 sync from ${source} -> ${dest}"
+
+  echo -e "\n\n------------- upload complete | showing dryrun with --delete\n"
+  # show what would happen with --delete, but don't do it (yet)
+  aws s3 sync --dryrun --delete --no-follow-symlinks --sse-c --sse-c-key "${KEY}" "${source}" "${dest}" || fail "error running aws s3 sync --delete dryrun from ${source} -> ${dest}"
+
+  echo -e "\nRun S3 sync with --delete [Yes | no] (case-sensitive)"
+  read yesno
+  if [ "${yesno}" != "Yes" ]; then
+    echo "Not deleting from S3"
+  else
+    echo "Deleting from S3"
+    aws s3 sync --delete --no-follow-symlinks --sse-c --sse-c-key "${KEY}" "${source}" "${dest}"  || fail "error running aws s3 sync --delete from ${source} -> ${dest}"
+  fi
+done

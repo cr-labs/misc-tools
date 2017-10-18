@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+
+BASH_DIR=$(dirname "$0")
+source ${BASH_DIR%*/}/common/common.include
+source ${BASH_DIR}/../misc-tools-config/config
+
+fail() {
+  echo -e "\n$1\n"
+  [ -n "${POP_ON_EXIT}" ] && popd > /dev/null
+  exit 1
+}
+
+usage() {
+  cat <<EOF
+
+Usage: $(basename $0) [-h]
+  Updates trackers of ${REPO_REMOTE}/${REPO_REMOTE_BRANCH} on all local repos
+  and performs 'git remote prune ${REPO_REMOTE}' on the local copy
+
+EOF
+}
+
+main() {
+
+  if [ "$1" == "-h" ]; then
+    usage
+    exit 0
+  fi
+
+  [ -n "${REPO_HOME}" ] || fail "Error: REPO_HOME env var not defined\n\n$(usage)"
+  [ -n "${REPO_REMOTE}" ] || fail "Error: REPO_REMOTE env var not defined in misc-tools-config/config\n\n$(usage)"
+  [ -n "${REPO_REMOTE_BRANCH}" ] || fail "Error: REPO_REMOTE_BRANCH env var not defined in misc-tools-config/config\n\n$(usage)"
+
+  POP_ON_EXIT=1
+  pushd ${REPO_HOME} > /dev/null
+
+  dirs=$(find . -type d -depth 1 ! -name "[.]*")
+  for repo in ${dirs}; do
+    echo -e "\n${repo}"
+    cd ${REPO_HOME}/${repo}
+    git remote -v | grep -Eq "^${REPO_REMOTE}"
+    [ $? -eq 0 ] || {
+      echo "repo: ${repo} has no remote named '${REPO_REMOTE}'. Skipping."
+      continue
+    }
+    CURRENT_BRANCH=$(git_current_branch) || fail "Error getting current git branch"
+    if [ "${CURRENT_BRANCH}" != "${REPO_REMOTE_BRANCH}" ]; then
+      git checkout master > /dev/null || fail "Error checking out ${REPO_REMOTE_BRANCH} branch"
+    fi
+    git fetch ${REPO_REMOTE}
+    git merge ${REPO_REMOTE}/${REPO_REMOTE_BRANCH}
+    git remote prune ${REPO_REMOTE}
+    if [ "${CURRENT_BRANCH}" != "${REPO_REMOTE_BRANCH}" ]; then
+      git checkout ${CURRENT_BRANCH} || fail "Error checking out current branch: ${CURRENT_BRANCH}"
+    fi
+  done
+
+  popd > /dev/null
+}
+
+main "$@"
