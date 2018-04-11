@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+
+BASH_DIR=$(dirname "$0")
+source ${BASH_DIR%*/}/common/common.include
+source ${BASH_DIR}/../misc-tools-config/config
+
+fail() {
+  echo -e "\n$1\n"
+  [ -n "${POP_ON_EXIT}" ] && popd > /dev/null
+  exit 1
+}
+
+usage() {
+  cat <<EOF
+
+Usage: $(basename $0) [-h] [HOST_NAME_TAG[*]|i-INSTANCE_ID] [USERNAME]
+  ssh to an AWS instance's IP address by its Name: tag or instance ID (i-....)
+  Use wildcard '*' if you don't care which specific instance you ssh to
+  provide [USERNAME] to override passing local username as remote username
+  If AWS_SSH_TUNNEL_HOST is set in config, ssh to the instance's private IP via tunnel host
+  If AWS_SSH_TUNNEL_HOST is not set, ssh to the instance's public IP
+
+Examples:
+  aws-ssh i-1c6b01143d797fb6f
+  aws-ssh i-1c6b01143d797fb6f ec2-user
+  aws-ssh web-01
+  aws-ssh web-*
+EOF
+}
+
+
+
+if [ -n "${AWS_SSH_TUNNEL_HOST}" ]; then
+  # Tunnel host set, so get private IP address and connect through tunnel host
+  QUERY="Reservations[0].Instances[0].NetworkInterfaces[0].PrivateIpAddreses[0].PrivateIpAddress"
+else
+  # Tunnel host not set, so get public IP address and connect directly
+  QUERY="Reservations[0].Instances[0].PublicIpAddress"
+fi
+
+if [ -n "$2" ]; then
+  SSH_USERNAME=$2
+else
+  SSH_USERNAME=${USER}
+fi
+
+if [ "$1" == "-h" ]; then
+  usage
+  exit 0
+fi
+
+if [[ $1 =~ ^i-[0-9a-fA-F]{8,17} ]]; then
+  # instance ID
+  ip=$(aws ec2 describe-instances --instance-id=$1 --output text --query ${QUERY})
+  [ $? -eq 0 ] && fail "No instance found with instance id: $1"
+else
+  # name: tag
+  ip=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=$1" --output text --query ${QUERY})
+  [ "${ip}" == "None" ] && fail "No instance found with name:tag: $1"
+fi
+
+echo "ssh to ${ip}"
+if [ -n "${AWS_SSH_TUNNEL_HOST}" ]; then
+  ssh -o ProxyCommand="ssh -W %h:%p ${USER}@${AWS_SSH_TUNNEL_HOST}" ${SSH_USERNAME}@${ip}
+else
+  ssh ${SSH_USERNAME}@${ip}
+fi

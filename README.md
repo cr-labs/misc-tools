@@ -16,3 +16,8 @@ with the name of the encrypt/decrypt secret on the OS/X keychain
 ## refresh-repos
 - syncs all repos under one directory with their origin/master
 - requires the vars REPO_HOME, REPO_REMOTE, REPO_REMOTE_BRANCH
+
+## aws-ssh
+- ssh to an AWS host by its instance-id, or its full or partial name: tag
+- supports ssh to a private IP through a proxy, or directly to a public IP
+- requires the var AWS_SSH_TUNNEL_HOST if using a proxy
