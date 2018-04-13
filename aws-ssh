@@ -2,7 +2,6 @@
 
 BASH_DIR=$(dirname "$0")
 source ${BASH_DIR%*/}/common/common.include
-source ${BASH_DIR}/../misc-tools-config/config
 
 fail() {
   echo -e "\n$1\n"

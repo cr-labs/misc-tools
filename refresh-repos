@@ -2,7 +2,6 @@
 
 BASH_DIR=$(dirname "$0")
 source ${BASH_DIR%*/}/common/common.include
-source ${BASH_DIR}/../misc-tools-config/config
 
 fail() {
   echo -e "\n$1\n"
@@ -28,11 +27,11 @@ main() {
   fi
 
   [ -n "${REPO_HOME}" ] || fail "Error: REPO_HOME env var not defined\n\n$(usage)"
-  [ -n "${REPO_REMOTE}" ] || fail "Error: REPO_REMOTE env var not defined in misc-tools-config/config\n\n$(usage)"
-  [ -n "${REPO_REMOTE_BRANCH}" ] || fail "Error: REPO_REMOTE_BRANCH env var not defined in misc-tools-config/config\n\n$(usage)"
+  [ -n "${REPO_REMOTE}" ] || fail "Error: REPO_REMOTE env var not defined\n\n$(usage)"
+  [ -n "${REPO_REMOTE_BRANCH}" ] || fail "Error: REPO_REMOTE_BRANCH env var not defined\n\n$(usage)"
 
   POP_ON_EXIT=1
-  pushd ${REPO_HOME} > /dev/null
+  pushd ${REPO_HOME} > /dev/null || fail "Error changing directory to ${REPO_HOME}"
 
   dirs=$(find . -type d -depth 1 ! -name "[.]*")
   for repo in ${dirs}; do
@@ -43,15 +42,15 @@ main() {
       echo "repo: ${repo} has no remote named '${REPO_REMOTE}'. Skipping."
       continue
     }
-    CURRENT_BRANCH=$(git_current_branch) || fail "Error getting current git branch"
+    CURRENT_BRANCH=$(git_current_branch) || fail "Error getting current git branch in ${repo}"
     if [ "${CURRENT_BRANCH}" != "${REPO_REMOTE_BRANCH}" ]; then
-      git checkout master > /dev/null || fail "Error checking out ${REPO_REMOTE_BRANCH} branch"
+      git checkout master > /dev/null || fail "Error checking out ${REPO_REMOTE}:${REPO_REMOTE_BRANCH} branch"
     fi
     git fetch ${REPO_REMOTE}
     git merge ${REPO_REMOTE}/${REPO_REMOTE_BRANCH}
     git remote prune ${REPO_REMOTE}
     if [ "${CURRENT_BRANCH}" != "${REPO_REMOTE_BRANCH}" ]; then
-      git checkout ${CURRENT_BRANCH} || fail "Error checking out current branch: ${CURRENT_BRANCH}"
+      git checkout ${CURRENT_BRANCH} || fail "Error checking out repo:branch: ${REPO_REMOTE}:${CURRENT_BRANCH}"
     fi
   done
 
