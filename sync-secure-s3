@@ -2,8 +2,10 @@
 
 BASH_DIR=$(dirname "$0")
 source ${BASH_DIR%*/}/common/common.include
+source ${HOME}/misc-utils-config.include
 
-[ -z "${S3_SYNC_SECURE_ENCRYPTION_KEY_LABEL_IN_KEYCHAIN}" ] || fail "S3_SYNC_SECURE_ENCRYPTION_KEY_LABEL_IN_KEYCHAIN env var not set"
+[ -n "${S3_SYNC_SECURE_ENCRYPTION_KEY_LABEL_IN_KEYCHAIN}" ] || fail "S3_SYNC_SECURE_ENCRYPTION_KEY_LABEL_IN_KEYCHAIN not set in config/common.include"
+[ -n "${S3_SYNC_SECURE_SOURCE_PATH_DESTS}" ] || fail "S3_SYNC_SECURE_SOURCE_PATH_DESTS not set in config/common.include"
 
 echo "Syncing"
 KEY=$(security find-generic-password -l "${S3_SYNC_SECURE_ENCRYPTION_KEY_LABEL_IN_KEYCHAIN}" -w) || fail "error reading key ${S3_SYNC_SECURE_ENCRYPTION_KEY_LABEL_IN_KEYCHAIN} from keychain"
