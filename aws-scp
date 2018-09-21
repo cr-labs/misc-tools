@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+
+fail() {
+    echo -e "$1"
+    exit 1
+}
+
+usage() {
+  cat <<EOF
+  scp a file through ${AWS_SSH_TUNNEL_HOST} to an instance by Name:tag, instance id, or IP address.
+
+  Usage: $(basename $0) [-h] [host:]from_file [host:]to_file
+
+  Examples:
+  by instance name
+    $ $(basename $0) ./myfile.txt webserver-01:/myfile.txt
+  by instance id
+    $ $(basename $0) i-0f9a071354cc9439e:/path/to/myfile.txt .
+  by ip address
+    $ $(basename $0) 10.19.3.11:myfile.txt ./myfile-1.txt
+EOF
+}
+
+# given a host ID, ip address, or name, return an IP address
+# This is a no-op for IP address but the caller doesn't have to worry about what it was handed
+resolve_host_ip() {
+  if [[ ${1} =~ ^i-[0-9a-zA-Z]{8,17}$ ]]; then
+    # Use the instance ID query if this is apparently an instance ID
+    ip=$(aws ec2 describe-instances --instance-id=${1} --output text --query Reservations[0].Instances[0].NetworkInterfaces[0].PrivateIpAddresses[0].PrivateIpAddress)
+    [ $? -ne 0 ] && fail "No instance found with instance_id=${1}" # --instance-id has a complicated result message but returns nonzero if not found
+  elif [[ ${1} =~ [0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3} ]]; then
+    # this is apparently an IP address
+    ip=${1}
+  else
+    # Otherwise this should be an instance Name: tag
+    ip=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=${1}" --output text --query Reservations[0].Instances[0].NetworkInterfaces[0].PrivateIpAddresses[0].PrivateIpAddress)
+    [ "${ip}" == "None" ] && fail "No instance found with tag:Name=${1}" # always returns zero, but also says "None" if nothing matched
+  fi
+
+  echo ${ip}
+}
+
+
+# if the host_path contains a host ID (instance id, ip address, or instance name), replace it with the host ip address
+# host either starts the line or is preceded by @, and is always terminated with a :
+# valid scp host paths are:
+#   user@host:path
+#   user@host:
+#   host:path
+#   host:
+#   path
+rewrite_user_host_path() {
+  local user
+  local host
+  local path
+
+  # If there is no host in this user_host_path, there's nothing to resolve.
+  if [[ $1 != *:* ]]; then
+    echo "$1"
+    return
+  fi
+
+  # Otherwise there is a host, so take the string apart, resolve the host, reassemble
+  # Handle user@ if there is one
+  if [[ $1 =~ @ ]]; then
+    user=${1%%@*}@
+    after_user=${1##*@}
+  else
+    user=""
+    after_user=$1
+  fi
+
+  host=${after_user%%:*}
+  path=${after_user##*:}
+
+  host=$(resolve_host_ip ${host})
+  echo "${user}${host}:${path}"
+}
+
+# If help was requested or hostname was omitted, show usage
+if [ -z "$1" -o "$1" == "-h" ]; then
+  fail "$(usage)"
+fi
+
+[ -z "${AWS_SSH_TUNNEL_HOST}" ] && fail "AWS_SSH_TUNNEL_HOST not defined"
+
+SOURCE=$(rewrite_user_host_path $1)
+DEST=$(rewrite_user_host_path $2)
+
+echo "scp ${SOURCE} ${DEST}"
+scp -o ProxyCommand="ssh -W %h:%p ${USER}@${AWS_SSH_TUNNEL_HOST}" ${SOURCE} ${DEST}
