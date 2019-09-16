@@ -28,7 +28,14 @@ for index in ${!S3_SYNC_SECURE_SOURCE_PATH_DESTS[@]}; do
   source="${S3_SYNC_SECURE_SOURCE_PATH_DESTS[$index]%%,*}" || fail "Error parsing source in:${S3_SYNC_SECURE_SOURCE_PATH_DESTS[$index]}"
   dest="${S3_SYNC_SECURE_SOURCE_PATH_DESTS[$index]##*,}" || fail "Error parsing dest in:${S3_SYNC_SECURE_SOURCE_PATH_DESTS[$index]}"
   echo "${source} -> ${dest}"
+  #  some volumes aren't always present. Don't fail if missing
+  if [ ! -e "${source}" ]; then
+    echo "${source} not found. Skipping."
+    continue
+  fi
 
   # Sync all content into S3 that isn't there; don't delete anything in S3 even if not in the local copy
   aws s3 sync ${DELETE_FLAG} --no-follow-symlinks --exclude .DS_Store --sse-c --sse-c-key "${KEY}" "${source}" "${dest}" || fail "error running aws s3 sync from ${source} -> ${dest}"
 done
+
+echo "DONE"
