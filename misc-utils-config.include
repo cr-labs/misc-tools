@@ -3,11 +3,18 @@
 # Set the appropriate values in this file and save it to:
 #    ${HOME}/misc-utils-config.include
 
-# Top-level directory/directories where the files to be sync'd are
+# Top-level directory/directories with files to be sync'd WITHOUT encryption
+# Format is: "source path,s3://bucket[/optional/path/in/bucket]"
+# One pair per line
+S3_SYNC_INSECURE_SOURCE_PATH_DESTS=(
+"${HOME}/Projects/Old Photos,s3://MYBUCKET/MYPATH_1"
+)
+
+# Top-level directory/directories with files to be sync'd with encryption
 # Format is: "source path,s3://bucket[/optional/path/in/bucket]"
 # One pair per line
 S3_SYNC_SECURE_SOURCE_PATH_DESTS=(
-"${HOME}/Pictures/Photos Library.photoslibrary,s3://MYBUCKET/MYPATH"
+"${HOME}/Pictures/Photos Library.photoslibrary,s3://MYBUCKET/MYPATH_2"
 )
 
 # Encryption key's label in the OS/X Keychain. Script will look it up.

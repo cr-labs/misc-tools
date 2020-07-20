@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+fail() {
+  echo -e "$1\n"
+  exit 1
+}
+
+usage() {
+  echo "$(basename $0) [--delete]"
+  echo "Syncs directories to s3. Config file should be in ~/misc-utils-config.include"
+  echo "Append --delete to sync with the --delete flag set"
+}
+
+[ -n "$1" -a "--delete" != "$1" ] && fail "$(usage)"
+[ "$1" == "--delete" ] && DELETE_FLAG="--delete"
+
+BASH_DIR=$(dirname "$0")
+source ${BASH_DIR%*/}/common/common.include
+source ${HOME}/misc-utils-config.include
+
+[ -n "${S3_SYNC_INSECURE_SOURCE_PATH_DESTS}" ] || fail "S3_SYNC_INSECURE_SOURCE_PATH_DESTS not set in config/common.include"
+
+echo "Syncing"
+
+for index in ${!S3_SYNC_INSECURE_SOURCE_PATH_DESTS[@]}; do
+  source="${S3_SYNC_INSECURE_SOURCE_PATH_DESTS[$index]%%,*}" || fail "Error parsing source in:${S3_SYNC_INSECURE_SOURCE_PATH_DESTS[$index]}"
+  dest="${S3_SYNC_INSECURE_SOURCE_PATH_DESTS[$index]##*,}" || fail "Error parsing dest in:${S3_SYNC_INSECURE_SOURCE_PATH_DESTS[$index]}"
+  echo "${source} -> ${dest}"
+  #  some volumes aren't always present. Don't fail if missing
+  if [ ! -e "${source}" ]; then
+    echo "${source} not found. Skipping."
+    continue
+  fi
+
+  # Sync all content into S3 that isn't there; don't delete anything in S3 even if not in the local copy
+  aws s3 sync ${DELETE_FLAG} --no-follow-symlinks --exclude .DS_Store "${source}" "${dest}" || fail "error running aws s3 sync from ${source} -> ${dest}"
+done
+
+echo "DONE"
