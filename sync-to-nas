@@ -1,0 +1,1 @@
+rsync -rvzt --exclude ".DS_Store" /Volumes/jim_projects/ /Volumes/jim_projects_nas/

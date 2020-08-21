@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+STORAGE_CLASS="STANDARD_IA"
+
 fail() {
   echo -e "$1\n"
   exit 1
@@ -13,6 +15,7 @@ usage() {
 
 [ -n "$1" -a "--delete" != "$1" ] && fail "$(usage)"
 [ "$1" == "--delete" ] && DELETE_FLAG="--delete"
+[ -n "${STORAGE_CLASS}" ] && STORAGE_CLASS_FLAG="--storage-class ${STORAGE_CLASS}"
 
 BASH_DIR=$(dirname "$0")
 source ${BASH_DIR%*/}/common/common.include
@@ -35,7 +38,7 @@ for index in ${!S3_SYNC_SECURE_SOURCE_PATH_DESTS[@]}; do
   fi
 
   # Sync all content into S3 that isn't there; don't delete anything in S3 even if not in the local copy
-  aws s3 sync ${DELETE_FLAG} --no-follow-symlinks --exclude .DS_Store --sse-c --sse-c-key "${KEY}" "${source}" "${dest}" || fail "error running aws s3 sync from ${source} -> ${dest}"
+  aws s3 sync ${DELETE_FLAG} ${STORAGE_CLASS_FLAG} --no-follow-symlinks --exclude "*.DS_Store" --sse-c --sse-c-key "${KEY}" "${source}" "${dest}" || fail "error running aws s3 sync from ${source} -> ${dest}"
 done
 
 echo "DONE"
