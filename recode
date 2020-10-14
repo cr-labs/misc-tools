@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+if [ -n "$1" ]; then
+  target=$1
+else
+  target=*.mkv
+fi
+echo $target
+
+for i in $target;
+  do name=`echo "$i" | cut -d'.' -f1`
+  echo "$name"
+  ffmpeg -i "$i" -vcodec copy -max_muxing_queue_size 65535 -f mp4 "${name}.mp4"
+  # ffmpeg -i "$i" -vcodec libx264 -max_muxing_queue_size 65535 -f mp4 "${name}.mp4"
+  # ffmpeg -i "$i" -vcodec h264_videotoolbox -max_muxing_queue_size 65535 -f mp4 "${name}-toolbox.mp4"
+done
