@@ -1,0 +1,99 @@
+import argparse
+from os.path import basename, dirname, normpath
+from os import makedirs
+
+import boto3
+
+# gets S3 logs for a range of hours on a single date.
+# Log files can all be written to one s3 bucket, on paths like this:
+# s3://my-s3-logs-bucket/path-to-logs/YYYY-MM-DD-HH-MM-SS-SUFFIX
+# if writing logs from many s3 buckets into a common logging bucket, path-to-logs
+# would ordinarily be the name of the bucket being logged
+
+# example:  get_logs('my-s3-logs-bucket', 'path-to-logs', '2020-10-19', 12, 19, 15, 20, '/download-here')
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Download S3 activity log files from S3')
+    parser.add_argument('bucket_name')
+    parser.add_argument('s3_path_prefix')
+    parser.add_argument('start_date', help='YYYY-MM-DD')
+    parser.add_argument('start_hour', type=int, help='00 .. 23')
+    parser.add_argument('start_minute', type=int, help='00 .. 60')
+    parser.add_argument('end_hour', type=int, help='00 .. 23')
+    parser.add_argument('end_minute', type=int, help='00 .. 60')
+    parser.add_argument('download_path_prefix', help='like /tmp')
+    return parser.parse_args()
+
+
+class HHMM:
+    def __init__(self, start_hour: int, start_minute: int, end_hour: int, end_minute: int):
+        self.hour = start_hour
+        self.minute = start_minute
+        self.end_hour = end_hour
+        self.end_minute = end_minute
+        self.end_time = self.end_hour * 60 + self.end_minute
+
+    def next(self) -> (int, int):
+        self.minute += 1
+        if self.minute > 59:
+            self.hour += 1
+            self.minute = 0
+        if self.hour * 60 + self.minute <= self.end_time:
+            return f"{self.hour:02}", f"{self.minute:02}"
+        return False, False
+
+
+def get_logs(
+        bucket_name: str,
+        s3_path_prefix: str,
+        start_date: str,
+        start_hour: int,
+        start_minute: int,
+        end_hour: int,
+        end_minute: int,
+        download_prefix: str):
+
+    session = boto3.Session(region_name="us-east-1")
+    s3_client = session.client("s3")
+    s3_resource = session.resource('s3')
+
+    hhmm = HHMM(start_hour, start_minute, end_hour, end_minute)
+
+    hh, mm = hhmm.next()
+    while hh:
+        print(f"hh:{hh} mm:{mm}")
+        list_bucket_args = {
+            'Bucket': bucket_name,
+            'Delimiter': '-',
+            'EncodingType': 'url',
+            'Prefix': f"{s3_path_prefix}/{start_date}-{start_hour}-{start_minute}-00-",
+            'MaxKeys': 1
+        }
+        keys = {'NextContinuationToken': True}
+        while keys.get('NextContinuationToken', False):
+            list_bucket_args['Prefix'] = f"{s3_path_prefix}/{start_date}-{hh}-{mm}-00-"
+            keys = s3_client.list_objects_v2(**list_bucket_args)
+            for key in keys.get('Contents', []):
+                path_file = key['Key']
+                download_path_file = normpath(f"{download_prefix}/{path_file}")
+                print(f"downloading: {path_file} to {download_path_file}")
+                dir_name = dirname(download_path_file)
+                makedirs(dir_name, mode=0o777, exist_ok=True)
+                s3_resource.Object(bucket_name, path_file).download_file(download_path_file)
+            list_bucket_args['ContinuationToken'] = keys.get('NextContinuationToken', False)
+        hh, mm = hhmm.next()
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    get_logs(
+        args.bucket_name,
+        args.s3_path_prefix,
+        args.start_date,
+        args.start_hour,
+        args.start_minute,
+        args.end_hour,
+        args.end_minute,
+        args.download_path_prefix
+    )
